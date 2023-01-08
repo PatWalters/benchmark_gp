@@ -7,6 +7,12 @@ from glob import glob
 import pandas as pd
 import numpy as np
 from sklearn.metrics import r2_score, mean_squared_error
+import os
+# Tell TensorFlow to shut the hell up
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+
+# This isn't the most efficient way to implement things. I realize I'm caluclating the same descriptors multiple times.
+# In my defense, I wanted to make sure I did this right so I tried to keep things as simple as possible. 
 
 
 def run_gp(input_df, descriptor_id, smiles_col="smiles", y_col="y"):
@@ -49,16 +55,21 @@ def get_stats(df, y_col="y", pred_col="pred", name_col="dataset"):
     pred = df[pred_col]
     r2 = r2_score(y, pred)
     rmse = mean_squared_error(y, pred)
-    print(name, r2, rmse)
+    return [name, r2, rmse]
 
 
 def run_benchmark():
-    for filename in glob("CHEMBL*.csv"):
+    row_list = []
+    for filename in glob("data/CHEMBL*.csv"):
         df = pd.read_csv(filename)
-        df['dataset'] = filename.replace(".csv", "")
-        res = run_gp(df, "morgan")
-        get_stats(res)
-
+        df['dataset'] = filename.replace(".csv", "").replace("data/","")
+        for desc in ["morgan","morgan_rdkit","morgan_counts","morgan_counts_rdkit"]:
+            res = run_gp(df, desc)
+            name, r2, rmse = get_stats(res)
+            _,r2_cliff,rmse_cliff = get_stats(res.query("cliff_mol == 1"))            print(name,desc,r2,rmse,r2_cliff,rmse_cliff)
+            row_list.append([name,desc,r2,rmse,r2_cliff,rmse_cliff])
+    row_df = pd.DataFrame(row_list,columns=["Name","Descriptors","R2","RMSE","R2_cliff","RMSE_cliff"])
+    row_df.to_csv("molecule_ace_gp_results.csv",index=False)
 
 if __name__ == "__main__":
     run_benchmark()
